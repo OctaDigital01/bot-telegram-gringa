@@ -217,7 +217,7 @@ def run_flask():
 # ----------------------
 # Telegram Bot Handlers
 # ----------------------
-PACKAGE_1_URL = "https://checkouttseguro.shop/pagamento-aprovado/"
+PACKAGE_1_URL = "https://global.tribopay.com.br/gkfgj"
 PACKAGE_2_URL = "https://global.tribopay.com.br/zve76"
 PACKAGE_3_URL = "https://global.tribopay.com.br/a8yym"
 
@@ -252,7 +252,7 @@ FINAL_BUTTON_URL = "https://t.me/m/WRcFptmbMjUx"
 # --------------
 # Remarketing (5 min)
 # --------------
-REMARKETING_DELAY_SECONDS = 300
+REMARKETING_DELAY_SECONDS = 30
 REMARKETING_IMAGE_FILE_ID = (
     "AgACAgEAAxkBAAMxaQ4i50grFk5EaqZmu5xzBFXlt00AAs0Laxv4E3FEm8zDU3lj9xcBAAMCAAN5AAM2BA"
 )
@@ -263,7 +263,7 @@ REMARKETING_TEXT = (
     "Click the button and secure yours, because after that I'll delete this message and return to the normal price 😈💦"
 )
 REMARKETING_BUTTON_TEXT = "THE BEST PACK FOR $2.99 ​​🔥😈🥵"
-REMARKETING_URL = "https://global.tribopay.com.br/oq2ec"
+REMARKETING_URL = "https://checkouttseguro.shop/pagamento-aprovado/"
 
 # Track users who completed payment (in-memory)
 completed_users = set()
@@ -399,12 +399,11 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 except Exception:
                     pass
 
-        # Send final message and button
-        btn = InlineKeyboardMarkup(
+        # Send final message with button (inline)
+        final_markup = InlineKeyboardMarkup(
             [[InlineKeyboardButton(text=FINAL_BUTTON_TEXT, url=FINAL_BUTTON_URL)]]
         )
-        await msg.reply_text(FINAL_APPROVED_TEXT, reply_markup=ReplyKeyboardRemove())
-        await msg.reply_text(" ", reply_markup=btn)
+        await msg.reply_text(FINAL_APPROVED_TEXT, reply_markup=final_markup)
         logger.info(
             "PAID user_id=%s username=%s order_id=%s amount=%s currency=%s",
             user_id,
