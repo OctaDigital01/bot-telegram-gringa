@@ -1,4 +1,4 @@
-python-telegram-bot==22.4
+python-telegram-bot[job-queue]==22.4
 Flask==3.0.3
 python-dotenv==1.0.1
 pyngrok==7.1.5
