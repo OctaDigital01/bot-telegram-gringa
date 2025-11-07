@@ -11,6 +11,9 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     WebAppInfo,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
 )
 from telegram.ext import (
     Application,
@@ -197,7 +200,7 @@ def run_flask():
 # ----------------------
 # Telegram Bot Handlers
 # ----------------------
-PACKAGE_1_URL = "https://web-production-db90.up.railway.app/pagamento-aprovado"
+PACKAGE_1_URL = "https://global.tribopay.com.br/gkfgj"
 PACKAGE_2_URL = "https://global.tribopay.com.br/zve76"
 PACKAGE_3_URL = "https://global.tribopay.com.br/a8yym"
 
@@ -223,15 +226,31 @@ def _is_https(url: str) -> bool:
     return url.lower().startswith("https://")
 
 
-def _webapp_button(text: str, target_url: str, pkg_code: str) -> InlineKeyboardButton:
-    # If we have an HTTPS WebApp base, open via web_app; otherwise fall back to a normal URL button.
+def _build_markups_for_start():
+    """Return (reply_markup, inline_markup) where only one will be used.
+    - If HTTPS: use ReplyKeyboardMarkup with KeyboardButton.web_app (required for sendData -> web_app_data)
+    - Else: use InlineKeyboardMarkup with URL buttons (fallback)
+    """
+    # URLs dos pacotes
+    pkgs = [
+        ("Package 1 🙈 • $2.99", PACKAGE_1_URL, "pkg1"),
+        ("Package 2 🔥😈 • $4.99", PACKAGE_2_URL, "pkg2"),
+        ("Package 3 🔥😈🥵 • $6.99", PACKAGE_3_URL, "pkg3"),
+    ]
+
     if _is_https(WEBAPP_BASE_URL):
-        # Inclui qual pacote foi escolhido, para persistirmos localmente e enviar na página de sucesso
-        wrapped = f"{WEBAPP_BASE_URL}/webapp?target={quote(target_url, safe='')}&pkg={quote(pkg_code, safe='')}"
-        return InlineKeyboardButton(text=text, web_app=WebAppInfo(url=wrapped))
+        # WebApp via Reply Keyboard (necessário para sendData -> web_app_data chegar ao bot)
+        kb_rows = []
+        for text, url, code in pkgs:
+            wrapped = f"{WEBAPP_BASE_URL}/webapp?target={quote(url, safe='')}&pkg={quote(code, safe='')}"
+            kb_rows.append([KeyboardButton(text=text, web_app=WebAppInfo(url=wrapped))])
+        reply_kb = ReplyKeyboardMarkup(kb_rows, resize_keyboard=True, one_time_keyboard=True)
+        return reply_kb, None
     else:
-        # Fallback ensures no Telegram error; opens the HTTPS checkout directly.
-        return InlineKeyboardButton(text=text, url=target_url)
+        # Sem HTTPS: usar inline com URLs normais
+        rows = [[InlineKeyboardButton(text=text, url=url)] for text, url, _ in pkgs]
+        inline_kb = InlineKeyboardMarkup(rows)
+        return None, inline_kb
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -239,19 +258,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # 1) Send image by file_id
         await update.message.reply_photo(START_IMAGE_FILE_ID)
 
-        # 2) Prepare buttons that open links via the Telegram WebApp
-        keyboard = [
-            [_webapp_button("Package 1 🙈 • $2.99", PACKAGE_1_URL, "pkg1")],
-            [_webapp_button("Package 2 🔥😈 • $4.99", PACKAGE_2_URL, "pkg2")],
-            [_webapp_button("Package 3 🔥😈🥵 • $6.99", PACKAGE_3_URL, "pkg3")],
-        ]
+        # 2) Prepare buttons (ReplyKeyboard if HTTPS for WebApp sendData)
+        reply_kb, inline_kb = _build_markups_for_start()
 
-        # 3) Send message with buttons
-        await update.message.reply_text(
-            START_TEXT,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            disable_web_page_preview=True,
-        )
+        # 3) Send message with appropriate keyboard
+        if reply_kb is not None:
+            await update.message.reply_text(
+                START_TEXT,
+                reply_markup=reply_kb,
+                disable_web_page_preview=True,
+            )
+        else:
+            await update.message.reply_text(
+                START_TEXT,
+                reply_markup=inline_kb,
+                disable_web_page_preview=True,
+            )
     except Exception as e:
         logger.exception("Error in /start handler: %s", e)
 
@@ -281,7 +303,8 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if amount:
             parts.append(f"Valor: {amount} {currency}".strip())
         text = "\n".join(parts)
-        await msg.reply_text(text)
+        # Remove o teclado após confirmação para limpar a UI
+        await msg.reply_text(text, reply_markup=ReplyKeyboardRemove())
         # Neste ponto, você poderia liberar o conteúdo, salvar no banco, etc.
     else:
         await msg.reply_text("Recebi dados do WebApp. Status: " + (status or "(vazio)"))
