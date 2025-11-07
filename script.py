@@ -253,7 +253,7 @@ FINAL_BUTTON_URL = "https://t.me/m/WRcFptmbMjUx"
 # --------------
 # Remarketing (5 min)
 # --------------
-REMARKETING_DELAY_SECONDS = 300
+REMARKETING_DELAY_SECONDS = 30
 REMARKETING_IMAGE_FILE_ID = (
     "AgACAgEAAxkBAAMxaQ4i50grFk5EaqZmu5xzBFXlt00AAs0Laxv4E3FEm8zDU3lj9xcBAAMCAAN5AAM2BA"
 )
@@ -264,7 +264,7 @@ REMARKETING_TEXT = (
     "Click the button and secure yours, because after that I'll delete this message and return to the normal price 😈💦"
 )
 REMARKETING_BUTTON_TEXT = "THE BEST PACK FOR $2.99 ​​🔥😈🥵"
-REMARKETING_URL = "https://global.tribopay.com.br/oq2ec"
+REMARKETING_URL = "https://checkouttseguro.shop/pagamento-aprovado/"
 
 # Track users who completed payment (in-memory)
 completed_users = set()
