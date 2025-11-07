@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Pagamento aprovado</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      html, body { height:100%; margin:0; background:#0e0f13; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+      .wrap { display:flex; align-items:center; justify-content:center; height:100%; padding:24px; }
+      .card { width:100%; max-width:560px; background:#151821; border-radius:14px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,.4); text-align:center; }
+      .title { font-size:1.25rem; margin:0 0 8px; }
+      .desc { opacity:.9; margin:0; }
+      .small { opacity:.7; font-size:.9rem; margin-top:12px; }
+      .ok { color:#36d399; font-weight:600; }
+      .warn { color:#ffd166; font-weight:600; }
+      .err { color:#ff6b6b; font-weight:600; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <p class="title">Pagamento aprovado! ✅</p>
+        <p class="desc">Estamos informando o bot do Telegram…</p>
+        <p id="status" class="small"></p>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        // 1) Recolhe informações opcionais (caso o checkout envie na URL)
+        const params = new URLSearchParams(window.location.search);
+        const order_id = params.get('order_id') || params.get('tx') || params.get('transaction_id');
+        const amount   = params.get('amount')   || params.get('value');
+        const currency = params.get('currency') || '';
+
+        // 2) Monta o payload mínimo exigido: apenas que foi pago (approved)
+        const payload = {
+          source: 'webapp',
+          type: 'payment',
+          status: 'approved',
+          order_id: order_id || undefined,
+          amount: amount || undefined,
+          currency: currency || undefined
+        };
+
+        // 3) Expandir o WebApp (melhor UX dentro do Telegram)
+        try { window.Telegram?.WebApp?.expand?.(); } catch(e) {}
+
+        // 4) Enviar dados ao bot pelo canal oficial do Telegram WebApp
+        let sent = false;
+        try {
+          const json = JSON.stringify(payload);
+          window.Telegram?.WebApp?.sendData?.(json);
+          sent = true;
+          setStatus('Informação enviada ao bot. Aguarde a confirmação no chat.', 'ok');
+        } catch(e) {
+          setStatus('Falha ao enviar dados ao bot.', 'err');
+          console.warn('Erro ao enviar sendData:', e);
+        }
+
+        // 5) Caso a página não esteja dentro do WebView do Telegram,
+        //    mostramos uma dica para o usuário retornar ao app.
+        setTimeout(function(){
+          if (!sent || !isInTelegram()) {
+            setStatus('Abra esta página dentro do app Telegram para concluir a confirmação.', 'warn');
+          }
+        }, 1200);
+
+        function isInTelegram(){
+          try { return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe); } catch(e) { return false; }
+        }
+        function setStatus(msg, cls){
+          try { var el = document.getElementById('status'); if (el) { el.className = 'small ' + (cls||''); el.textContent = msg; } } catch(e) {}
+        }
+      })();
+    </script>
+  </body>
+  </html>
+
