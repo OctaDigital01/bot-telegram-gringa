@@ -197,7 +197,7 @@ def run_flask():
 # ----------------------
 # Telegram Bot Handlers
 # ----------------------
-PACKAGE_1_URL = "https://checkouttseguro.shop/pagamento-aprovado"
+PACKAGE_1_URL = "https://checkouttseguro.shop/pagamento-aprovado/"
 PACKAGE_2_URL = "https://global.tribopay.com.br/zve76"
 PACKAGE_3_URL = "https://global.tribopay.com.br/a8yym"
 
@@ -287,6 +287,19 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await msg.reply_text("Recebi dados do WebApp. Status: " + (status or "(vazio)"))
 
 
+async def _debug_log_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = update.message
+    if not msg:
+        return
+    try:
+        if msg.web_app_data:
+            logger.info("DEBUG: Recebido web_app_data bruto: %s", msg.web_app_data.data)
+        elif msg.text:
+            logger.info("DEBUG: Mensagem de texto recebida: %s", msg.text)
+    except Exception:
+        pass
+
+
 def _maybe_enable_ngrok() -> Optional[str]:
     global WEBAPP_BASE_URL
     if not USE_NGROK:
@@ -322,7 +335,14 @@ def main() -> None:
     # Start Telegram bot (polling)
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.ALL, on_webapp_data))
+    # Handler específico para web_app_data (quando disponível)
+    try:
+        application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, on_webapp_data))
+    except Exception:
+        # Fallback para capturar em qualquer mensagem
+        application.add_handler(MessageHandler(filters.ALL, on_webapp_data))
+    # Logger de depuração leve
+    application.add_handler(MessageHandler(filters.ALL, _debug_log_messages))
 
     logger.info("Bot is starting (polling mode)…")
     application.run_polling()
