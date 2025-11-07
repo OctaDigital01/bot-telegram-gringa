@@ -50,10 +50,27 @@ if not BOT_TOKEN:
 # Logging
 # ----------------------
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,  # Root at WARNING para reduzir spam
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("bot")
+logger.setLevel(logging.INFO)  # Nosso logger continua em INFO
+
+# Silenciar verbosidade de bibliotecas de terceiros
+for name in (
+    "httpx",
+    "telegram",
+    "telegram.ext",
+    "apscheduler",
+    "werkzeug",
+    "pyngrok",
+):
+    try:
+        lib_logger = logging.getLogger(name)
+        lib_logger.setLevel(logging.WARNING)
+        lib_logger.propagate = False
+    except Exception:
+        pass
 
 
 # ----------------------
@@ -221,6 +238,37 @@ START_TEXT = (
     "👇🏼🔥 Choose what you want and let me make you cum 😈💦"
 )
 
+# --------------
+# After-Payment
+# --------------
+FINAL_APPROVED_TEXT = (
+    "Okay, my love, I've received it! 😘\n\n"
+    "Send me a private message and I'll send it to you, okay?\n\n"
+    "Click the button below and send me a message so I can send it to you. 🔥❤️"
+)
+FINAL_BUTTON_TEXT = "SEND MESSAGE NOW ✅🔥"
+FINAL_BUTTON_URL = "https://t.me/m/WRcFptmbMjUx"
+
+# --------------
+# Remarketing (5 min)
+# --------------
+REMARKETING_DELAY_SECONDS = 300
+REMARKETING_IMAGE_FILE_ID = (
+    "AgACAgEAAxkBAAMxaQ4i50grFk5EaqZmu5xzBFXlt00AAs0Laxv4E3FEm8zDU3lj9xcBAAMCAAN5AAM2BA"
+)
+REMARKETING_TEXT = (
+    "💝 I've reserved a special gift for you!\n\n"
+    "I've gone crazy and lowered the price of package 03 🔥😈🥵 to the same price as package 01 🙈: from $6.99 to just $2.99 ​​🔥\n"
+    "It's the complete combo with all the videos, bonuses, and my direct contact just for you, no one else involved… I want you around, reply to me privately and I'll make you c..um a lot. 💋\n\n"
+    "Click the button and secure yours, because after that I'll delete this message and return to the normal price 😈💦"
+)
+REMARKETING_BUTTON_TEXT = "THE BEST PACK FOR $2.99 ​​🔥😈🥵"
+REMARKETING_URL = "https://global.tribopay.com.br/oq2ec"
+
+# Track users who completed payment (in-memory)
+completed_users = set()
+scheduled_jobs = {}
+
 
 def _is_https(url: str) -> bool:
     return url.lower().startswith("https://")
@@ -253,8 +301,33 @@ def _build_markups_for_start():
         return None, inline_kb
 
 
+def _remarketing_reply_markup():
+    """Reply keyboard with single WebApp button when HTTPS; else inline URL button."""
+    if _is_https(WEBAPP_BASE_URL):
+        wrapped = f"{WEBAPP_BASE_URL}/webapp?target={quote(REMARKETING_URL, safe='')}"
+        kb = ReplyKeyboardMarkup(
+            [[KeyboardButton(text=REMARKETING_BUTTON_TEXT, web_app=WebAppInfo(url=wrapped))]],
+            resize_keyboard=True,
+            one_time_keyboard=True,
+        )
+        return kb, None
+    else:
+        kb = InlineKeyboardMarkup(
+            [[InlineKeyboardButton(text=REMARKETING_BUTTON_TEXT, url=REMARKETING_URL)]]
+        )
+        return None, kb
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
+        user_id = update.effective_user.id if update.effective_user else None
+        chat_id = update.effective_chat.id if update.effective_chat else None
+        username = update.effective_user.username if update.effective_user else None
+
+        # If user already completed, just stop silently
+        if user_id in completed_users:
+            return
+
         # 1) Send image by file_id
         await update.message.reply_photo(START_IMAGE_FILE_ID)
 
@@ -274,6 +347,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 reply_markup=inline_kb,
                 disable_web_page_preview=True,
             )
+
+        # 4) Schedule remarketing if not completed
+        if user_id and chat_id:
+            logger.info("START user_id=%s username=%s chat_id=%s", user_id, username, chat_id)
+            # Cancel previous job if exists
+            old = scheduled_jobs.pop(user_id, None)
+            if old:
+                try:
+                    old.schedule_removal()
+                except Exception:
+                    pass
+            job = context.application.job_queue.run_once(
+                callback=remarketing_job,
+                when=REMARKETING_DELAY_SECONDS,
+                chat_id=chat_id,
+                name=f"remarketing-{user_id}",
+                data={"user_id": user_id, "chat_id": chat_id},
+            )
+            scheduled_jobs[user_id] = job
     except Exception as e:
         logger.exception("Error in /start handler: %s", e)
 
@@ -295,32 +387,38 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     currency = data.get("currency", "")
 
     if status == "approved":
-        parts = ["✅ Pagamento aprovado!"]
-        if pkg:
-            parts.append(f"Pacote: {pkg}")
-        if order_id:
-            parts.append(f"Pedido: {order_id}")
-        if amount:
-            parts.append(f"Valor: {amount} {currency}".strip())
-        text = "\n".join(parts)
-        # Remove o teclado após confirmação para limpar a UI
-        await msg.reply_text(text, reply_markup=ReplyKeyboardRemove())
-        # Neste ponto, você poderia liberar o conteúdo, salvar no banco, etc.
+        # Mark as completed and cancel any scheduled remarketing
+        user_id = update.effective_user.id if update.effective_user else None
+        username = update.effective_user.username if update.effective_user else None
+        if user_id:
+            completed_users.add(user_id)
+            job = scheduled_jobs.pop(user_id, None)
+            if job:
+                try:
+                    job.schedule_removal()
+                except Exception:
+                    pass
+
+        # Send final message and button
+        btn = InlineKeyboardMarkup(
+            [[InlineKeyboardButton(text=FINAL_BUTTON_TEXT, url=FINAL_BUTTON_URL)]]
+        )
+        await msg.reply_text(FINAL_APPROVED_TEXT, reply_markup=ReplyKeyboardRemove())
+        await msg.reply_text(" ", reply_markup=btn)
+        logger.info(
+            "PAID user_id=%s username=%s order_id=%s amount=%s currency=%s",
+            user_id,
+            username,
+            order_id,
+            amount,
+            currency,
+        )
+        # End of flow for this user
     else:
-        await msg.reply_text("Recebi dados do WebApp. Status: " + (status or "(vazio)"))
-
-
-async def _debug_log_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.message
-    if not msg:
+        # Não registrar/logar para manter o log limpo; ignore estados diferentes
         return
-    try:
-        if msg.web_app_data:
-            logger.info("DEBUG: Recebido web_app_data bruto: %s", msg.web_app_data.data)
-        elif msg.text:
-            logger.info("DEBUG: Mensagem de texto recebida: %s", msg.text)
-    except Exception:
-        pass
+
+
 
 
 def _maybe_enable_ngrok() -> Optional[str]:
@@ -364,8 +462,28 @@ def main() -> None:
     except Exception:
         # Fallback para capturar em qualquer mensagem
         application.add_handler(MessageHandler(filters.ALL, on_webapp_data))
-    # Logger de depuração leve
-    application.add_handler(MessageHandler(filters.ALL, _debug_log_messages))
+
+
+async def remarketing_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    data = context.job.data or {}
+    user_id = data.get("user_id")
+    chat_id = data.get("chat_id")
+
+    # Skip if already completed
+    if user_id in completed_users:
+        return
+
+    # Send remarketing image + text + button
+    try:
+        await context.bot.send_photo(chat_id=chat_id, photo=REMARKETING_IMAGE_FILE_ID)
+    except Exception:
+        pass
+
+    reply_kb, inline_kb = _remarketing_reply_markup()
+    if reply_kb is not None:
+        await context.bot.send_message(chat_id=chat_id, text=REMARKETING_TEXT, reply_markup=reply_kb, disable_web_page_preview=True)
+    else:
+        await context.bot.send_message(chat_id=chat_id, text=REMARKETING_TEXT, reply_markup=inline_kb, disable_web_page_preview=True)
 
     logger.info("Bot is starting (polling mode)…")
     application.run_polling()
