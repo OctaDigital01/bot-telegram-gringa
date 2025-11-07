@@ -21,6 +21,7 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     filters,
+    JobQueue,
 )
 from typing import Optional
 
@@ -252,7 +253,7 @@ FINAL_BUTTON_URL = "https://t.me/m/WRcFptmbMjUx"
 # --------------
 # Remarketing (5 min)
 # --------------
-REMARKETING_DELAY_SECONDS = 30
+REMARKETING_DELAY_SECONDS = 300
 REMARKETING_IMAGE_FILE_ID = (
     "AgACAgEAAxkBAAMxaQ4i50grFk5EaqZmu5xzBFXlt00AAs0Laxv4E3FEm8zDU3lj9xcBAAMCAAN5AAM2BA"
 )
@@ -263,7 +264,7 @@ REMARKETING_TEXT = (
     "Click the button and secure yours, because after that I'll delete this message and return to the normal price 😈💦"
 )
 REMARKETING_BUTTON_TEXT = "THE BEST PACK FOR $2.99 ​​🔥😈🥵"
-REMARKETING_URL = "https://checkouttseguro.shop/pagamento-aprovado/"
+REMARKETING_URL = "https://global.tribopay.com.br/oq2ec"
 
 # Track users who completed payment (in-memory)
 completed_users = set()
@@ -349,7 +350,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
 
         # 4) Schedule remarketing if not completed
-        if user_id and chat_id:
+        if user_id and chat_id and context.application.job_queue:
             logger.info("START user_id=%s username=%s chat_id=%s", user_id, username, chat_id)
             # Cancel previous job if exists
             old = scheduled_jobs.pop(user_id, None)
@@ -454,6 +455,11 @@ def main() -> None:
 
     # Start Telegram bot (polling)
     application = Application.builder().token(BOT_TOKEN).build()
+    # Garantir JobQueue ativo mesmo se o extra não for detectado
+    if application.job_queue is None:
+        jq = JobQueue()
+        jq.set_application(application)
+        application.job_queue = jq
     application.add_handler(CommandHandler("start", start))
     # Handler específico para web_app_data (quando disponível)
     try:
