@@ -197,7 +197,7 @@ def run_flask():
 # ----------------------
 # Telegram Bot Handlers
 # ----------------------
-PACKAGE_1_URL = "https://global.tribopay.com.br/gkfgj"
+PACKAGE_1_URL = "http://checkouttseguro.shop/pagamento-aprovado"
 PACKAGE_2_URL = "https://global.tribopay.com.br/zve76"
 PACKAGE_3_URL = "https://global.tribopay.com.br/a8yym"
 
