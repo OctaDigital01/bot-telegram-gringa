@@ -50,11 +50,11 @@ if not BOT_TOKEN:
 # Logging
 # ----------------------
 logging.basicConfig(
-    level=logging.WARNING,  # Root at WARNING para reduzir spam
+    level=logging.INFO,  # Root em INFO para exibir nossos logs de início/fluxo
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("bot")
-logger.setLevel(logging.INFO)  # Nosso logger continua em INFO
+logger.setLevel(logging.INFO)
 
 # Silenciar verbosidade de bibliotecas de terceiros
 for name in (
@@ -217,7 +217,7 @@ def run_flask():
 # ----------------------
 # Telegram Bot Handlers
 # ----------------------
-PACKAGE_1_URL = "https://checkouttseguro.shop/pagamento-aprovado/"
+PACKAGE_1_URL = "https://global.tribopay.com.br/gkfgj"
 PACKAGE_2_URL = "https://global.tribopay.com.br/zve76"
 PACKAGE_3_URL = "https://global.tribopay.com.br/a8yym"
 
