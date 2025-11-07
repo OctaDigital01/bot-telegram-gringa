@@ -462,6 +462,8 @@ def main() -> None:
     except Exception:
         # Fallback para capturar em qualquer mensagem
         application.add_handler(MessageHandler(filters.ALL, on_webapp_data))
+    logger.info("Bot is starting (polling mode)…")
+    application.run_polling()
 
 
 async def remarketing_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -484,6 +486,7 @@ async def remarketing_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         await context.bot.send_message(chat_id=chat_id, text=REMARKETING_TEXT, reply_markup=reply_kb, disable_web_page_preview=True)
     else:
         await context.bot.send_message(chat_id=chat_id, text=REMARKETING_TEXT, reply_markup=inline_kb, disable_web_page_preview=True)
+    return
 
     logger.info("Bot is starting (polling mode)…")
     application.run_polling()
